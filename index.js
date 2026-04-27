@@ -5,25 +5,37 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("Bot aktif ve Render üzerinde çalışıyor!");
+  res.send("Bot aktif ve kanallara sırayla mesaj gönderiyor!");
 });
 
 app.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda dinleniyor.`);
 });
 
+// Environment Değişkenleri
 const token = process.env.TOKEN;
-const channelId = process.env.CHANNEL_ID;
+const channelIdsRaw = process.env.CHANNEL_IDS; // Virgülle ayrılmış ID'ler: "111,222,333"
 const message = process.env.MESSAGE;
 
-if (!token || !channelId || !message) {
-    console.error("HATA: Environment (gizli değişkenler) bölümünde TOKEN, CHANNEL_ID veya MESSAGE eksik!");
+// Değişken Kontrolü
+if (!token || !channelIdsRaw || !message) {
+    console.error("HATA: TOKEN, CHANNEL_IDS veya MESSAGE eksik!");
 } else {
-  
-    setInterval(sendMessage, 5000);
+    // Virgülle ayrılan string'i temiz bir diziye çeviriyoruz
+    const channelIds = channelIdsRaw.split(',').map(id => id.trim());
+    let currentIndex = 0;
+
+    // Döngüyü başlat
+    setInterval(() => {
+        const currentChannel = channelIds[currentIndex];
+        sendMessage(currentChannel);
+
+        // Bir sonraki kanalın indeksine geç, liste biterse başa dön
+        currentIndex = (currentIndex + 1) % channelIds.length;
+    }, 5000);
 }
 
-function sendMessage() {
+function sendMessage(channelId) {
   axios.post(`https://discord.com/api/v9/channels/${channelId}/messages`, {
     content: message
   }, {
@@ -32,8 +44,8 @@ function sendMessage() {
       "Content-Type": "application/json"
     }
   }).then(() => {
-    console.log(`✅ Mesaj başarıyla gönderildi: "${message}"`);
+    console.log(`✅ Kanal [${channelId}] için mesaj gönderildi.`);
   }).catch((err) => {
-    console.error("❌ Mesaj gönderilemedi. Hata:", err.response?.status, err.response?.data);
+    console.error(`❌ Kanal [${channelId}] hatası:`, err.response?.status, err.response?.data);
   });
 }
