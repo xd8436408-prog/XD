@@ -4,47 +4,55 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => { res.send("Bot Koruma Modunda Aktif."); });
-app.listen(PORT, () => { console.log(`Sunucu ${PORT} aktif.`); });
+app.get("/", (req, res) => {
+  res.send("Bot döngüsel modda aktif!");
+});
 
+app.listen(PORT, () => {
+  console.log(`Sunucu ${PORT} portunda dinleniyor.`);
+});
+
+// --- AYARLAR ---
 const token = process.env.TOKEN;
-const channelIdsRaw = process.env.CHANNEL_IDS;
 const message = process.env.MESSAGE;
 
-if (!token || !channelIdsRaw || !message) {
-    console.error("Eksik değişkenler var!");
+// Verdiğin kanal ID'lerini listeye ekledik
+const channels = [
+  "1467580268075421789",
+  "1465058037088784447",
+  "1465052769743405128"
+];
+
+let currentIndex = 0; // Hangi kanalda olduğumuzu takip eder
+
+if (!token || !message) {
+    console.error("HATA: TOKEN veya MESSAGE değişkeni eksik!");
 } else {
-    const channelIds = channelIdsRaw.split(',').map(id => id.trim());
-    let currentIndex = 0;
+    // 5 saniyede bir (5000ms) çalışır
+    setInterval(sendMessage, 5000);
+}
 
-    async function sendNext() {
-        const channelId = channelIds[currentIndex];
-        
-        try {
-            await axios.post(`https://discord.com/api/v9/channels/${channelId}/messages`, 
-            { content: message }, 
-            { headers: { "Authorization": token, "Content-Type": "application/json" } });
+function sendMessage() {
+  const currentChannelId = channels[currentIndex];
 
-            console.log(`✅ Başarılı: [${channelId}]`);
-            currentIndex = (currentIndex + 1) % channelIds.length;
-            
-            // Başarılı olursa 60-120 saniye arası rastgele bekle
-            const waitTime = Math.floor(Math.random() * (120000 - 60000) + 60000);
-            console.log(`⏳ Güvenlik için ${waitTime/1000} saniye bekleniyor...`);
-            setTimeout(sendNext, waitTime);
-
-        } catch (err) {
-            if (err.response?.status === 429) {
-                // Hız limitine takıldık! Discord'un 'retry_after' süresini bekle
-                const retryAfter = (err.response.data.retry_after || 60) * 1000;
-                console.error(`⚠️ Hız limiti! Discord ${retryAfter/1000} sn beklemeni istiyor.`);
-                setTimeout(sendNext, retryAfter + 5000); // 5sn de biz ekleyelim garanti olsun
-            } else {
-                console.error("❌ Hata oluştu, 2 dakika sonra tekrar denenecek.");
-                setTimeout(sendNext, 120000);
-            }
-        }
+  axios.post(`https://discord.com/api/v9/channels/${currentChannelId}/messages`, {
+    content: message
+  }, {
+    headers: {
+      "Authorization": token,
+      "Content-Type": "application/json"
     }
+  }).then(() => {
+    console.log(`✅ [Kanal ${currentIndex + 1}] Mesaj gönderildi: ${currentChannelId}`);
+    
+    // SIRALAMA MANTIĞI:
+    // 0 -> 1 -> 2 -> (başa dön) 0
+    currentIndex = (currentIndex + 1) % channels.length;
 
-    sendNext();
+  }).catch((err) => {
+    console.error(`❌ HATA (${currentChannelId}):`, err.response?.status);
+    
+    // Hata alınsa bile bir sonraki kanala geçmek için:
+    currentIndex = (currentIndex + 1) % channels.length;
+  });
 }
