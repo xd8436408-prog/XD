@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("Bot döngüsel modda aktif!");
+  res.send("Bot yazma özelliğiyle aktif!");
 });
 
 app.listen(PORT, () => {
@@ -15,27 +15,44 @@ app.listen(PORT, () => {
 // --- AYARLAR ---
 const token = process.env.TOKEN;
 const message = process.env.MESSAGE;
-
-// Verdiğin kanal ID'lerini listeye ekledik
 const channels = [
   "1467580268075421789",
   "1465058037088784447",
   "1465052769743405128"
 ];
 
-let currentIndex = 0; // Hangi kanalda olduğumuzu takip eder
+let currentIndex = 0;
 
 if (!token || !message) {
-    console.error("HATA: TOKEN veya MESSAGE değişkeni eksik!");
+    console.error("HATA: TOKEN veya MESSAGE eksik!");
 } else {
-    // 5 saniyede bir (5000ms) çalışır
-    setInterval(sendMessage, 5000);
+    // Döngüyü başlat
+    setInterval(handleCycle, 5000);
 }
 
-function sendMessage() {
+async function handleCycle() {
   const currentChannelId = channels[currentIndex];
 
-  axios.post(`https://discord.com/api/v9/channels/${currentChannelId}/messages`, {
+  try {
+    // 1. Önce "Yazıyor..." animasyonunu gönder
+    await axios.post(`https://discord.com/api/v9/channels/${currentChannelId}/typing`, {}, {
+      headers: { "Authorization": token }
+    });
+
+    // 2. Kısa bir gecikme (Gerçekçi görünmesi için 1.5 saniye bekle ve mesajı at)
+    setTimeout(() => {
+      sendActualMessage(currentChannelId);
+    }, 1500);
+
+  } catch (err) {
+    console.error(`❌ Typing hatası (${currentChannelId}):`, err.response?.status);
+    // Hata olsa bile sırayı kaydır ki takılmasın
+    currentIndex = (currentIndex + 1) % channels.length;
+  }
+}
+
+function sendActualMessage(channelId) {
+  axios.post(`https://discord.com/api/v9/channels/${channelId}/messages`, {
     content: message
   }, {
     headers: {
@@ -43,16 +60,11 @@ function sendMessage() {
       "Content-Type": "application/json"
     }
   }).then(() => {
-    console.log(`✅ [Kanal ${currentIndex + 1}] Mesaj gönderildi: ${currentChannelId}`);
-    
-    // SIRALAMA MANTIĞI:
-    // 0 -> 1 -> 2 -> (başa dön) 0
+    console.log(`✅ Mesaj Gönderildi: ${channelId}`);
+    // Mesaj başarılıysa bir sonraki kanala geç
     currentIndex = (currentIndex + 1) % channels.length;
-
   }).catch((err) => {
-    console.error(`❌ HATA (${currentChannelId}):`, err.response?.status);
-    
-    // Hata alınsa bile bir sonraki kanala geçmek için:
+    console.error(`❌ Mesaj Hatası (${channelId}):`, err.response?.status);
     currentIndex = (currentIndex + 1) % channels.length;
   });
 }
